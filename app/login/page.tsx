@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Input, Card, CardBody, CardHeader } from '@nextui-org/react'
 import { supabase } from '@/utils/supabase'
 import Link from 'next/link'
@@ -11,6 +11,19 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        localStorage.setItem('supabase_token', session.access_token)
+        router.push('/profile')
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,6 +38,21 @@ export default function Login() {
       setError(error.message)
     } else {
       router.push('/profile')
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError(null)
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      setError(error.message)
     }
   }
 
@@ -54,6 +82,18 @@ export default function Login() {
               Login
             </Button>
           </form>
+          <div className="my-4 flex items-center justify-between">
+            <hr className="w-full" />
+            <span className="px-2 text-gray-500">or</span>
+            <hr className="w-full" />
+          </div>
+          <Button 
+            onClick={handleGoogleSignIn} 
+            color="secondary" 
+            fullWidth
+          >
+            Sign in with Google
+          </Button>
           {error && <p className="text-red-500 mt-4">{error}</p>}
           <p className="mt-4 text-center">
             Don't have an account?{' '}
