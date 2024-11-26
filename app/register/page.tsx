@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Input, Card, CardBody, CardHeader } from '@nextui-org/react'
 import { supabase } from '@/utils/supabase'
 import Link from 'next/link'
@@ -9,22 +9,65 @@ import { useRouter } from 'next/navigation'
 export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        localStorage.setItem('supabase_token', session.access_token)
+        router.push('/profile')
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [router])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username: username
+        }
+      }
     })
 
     if (error) {
       setError(error.message)
-    } else {
-      router.push('/login')
+    } else if (data.user) {
+      // Update the user's metadata with the username
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { username: username }
+      })
+
+      if (updateError) {
+        setError(updateError.message)
+      } else {
+        router.push('/profile')
+      }
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setError(null)
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      setError(error.message)
     }
   }
 
@@ -36,6 +79,13 @@ export default function Register() {
         </CardHeader>
         <CardBody>
           <form onSubmit={handleRegister} className="space-y-4">
+            <Input
+              type="text"
+              label="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
             <Input
               type="email"
               label="Email"
@@ -54,6 +104,18 @@ export default function Register() {
               Register
             </Button>
           </form>
+          <div className="my-4 flex items-center justify-between">
+            <hr className="w-full" />
+            <span className="px-2 text-gray-500">or</span>
+            <hr className="w-full" />
+          </div>
+          <Button 
+            onClick={handleGoogleSignUp} 
+            color="secondary" 
+            fullWidth
+          >
+            Sign up with Google
+          </Button>
           {error && <p className="text-red-500 mt-4">{error}</p>}
           <p className="mt-4 text-center">
             Already have an account?{' '}
